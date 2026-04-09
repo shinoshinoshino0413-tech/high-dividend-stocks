@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Stock {
+  id             Int         @id @default(autoincrement())
+  code           String      @unique
+  name           String?
+  market         String?
+  sector         String?
+  targetYield    Float?
+  annualDividend Float?
+  price          Float?
+  currentYield   Float?
+  targetPrice    Float?
+  note           String?
+  updatedAt      DateTime?
+  createdAt      DateTime    @default(now())
+  modifiedAt     DateTime    @updatedAt
+  scrapeLogs     ScrapeLog[]
+}
+
+model ScrapeLog {
+  id        Int      @id @default(autoincrement())
+  stockId   Int
+  source    String
+  status    String
+  message   String?
+  scrapedAt DateTime @default(now())
+  stock     Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
+}

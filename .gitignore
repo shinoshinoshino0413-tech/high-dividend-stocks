@@ -1,0 +1,9 @@
+.DS_Store
+.next
+node_modules
+.env
+/tmp/high-dividend-stocks.db
+/tmp/high-dividend-stocks.db-journal
+coverage
+【リベ大流】高配当株企業分析シート【v2.0】.xlsx
+【リベ大流】高配当株企業分析シート【v2.0】.xlsx
