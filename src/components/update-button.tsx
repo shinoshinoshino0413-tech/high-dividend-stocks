@@ -27,16 +27,16 @@ export function UpdateButton() {
   }
 
   return (
-    <div className="flex flex-col items-start gap-3">
+    <div className="flex w-full flex-col items-start gap-3 sm:w-auto">
       <button
         type="button"
         onClick={handleClick}
         disabled={isPending}
-        className="rounded-full bg-ember px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#9d4f30] disabled:cursor-not-allowed disabled:opacity-70"
+        className="w-full rounded-2xl bg-gradient-to-r from-fuchsia-500 to-violet-500 px-5 py-3 text-sm font-semibold text-white transition hover:from-fuchsia-400 hover:to-violet-400 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
       >
         {isPending ? "更新中..." : "株価・配当金を更新"}
       </button>
-      {message ? <p className="text-sm text-ink/70">{message}</p> : null}
+      {message ? <p className="text-sm text-slate-300">{message}</p> : null}
     </div>
   );
 }

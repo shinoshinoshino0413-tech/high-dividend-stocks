@@ -23,16 +23,16 @@ export function ImportSheetsButton() {
   }
 
   return (
-    <div className="flex flex-col items-start gap-3">
+    <div className="flex w-full flex-col items-start gap-3 sm:w-auto">
       <button
         type="button"
         onClick={handleClick}
         disabled={isPending}
-        className="rounded-full border border-pine/20 bg-white px-6 py-3 text-sm font-semibold text-pine transition hover:border-pine/40 disabled:cursor-not-allowed disabled:opacity-70"
+        className="w-full rounded-2xl border border-cyan-300/20 bg-white/5 px-5 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-200/35 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
       >
         {isPending ? "取込と更新を実行中..." : "Google Sheets から取込して更新"}
       </button>
-      {message ? <p className="text-sm text-ink/70">{message}</p> : null}
+      {message ? <p className="text-sm text-slate-300">{message}</p> : null}
     </div>
   );
 }
