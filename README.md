@@ -8,7 +8,7 @@
 - TypeScript
 - Tailwind CSS
 - Prisma
-- SQLite
+- PostgreSQL (Supabase 想定)
 - Yahoo Finance / stooq / 株探 / IR Bank のフォールバック取得
 
 ## できること
@@ -26,14 +26,14 @@
 1. Node.js 20系以上を入れる
 2. このプロジェクト直下で `.env` を作る
 3. 依存関係をインストールする
-4. Prisma Client とSQLite DBを作る
+4. Prisma Client とPostgreSQL DBを作る
 5. サンプルデータを投入する
 6. 開発サーバーを起動する
 
 ### 1. `.env` を作成
 
 `.env.example` をコピーして `.env` を作ります。  
-`DATABASE_URL` は Prisma と日本語パスの相性回避のため、最初は `/tmp` のSQLiteを使う設定にしています。
+本番運用は `Supabase PostgreSQL` を前提にしています。
 
 ```bash
 cp .env.example .env
@@ -53,12 +53,7 @@ npm run db:push
 npm run db:seed
 ```
 
-もし `prisma db push` が環境依存で落ちる場合は、次の回避手順を使います。
-
-```bash
-npm run db:generate
-npm run db:init
-```
+`DATABASE_URL` と `DIRECT_URL` には Supabase の接続文字列を入れてください。
 
 ### 4. 開発サーバーを起動
 
@@ -186,6 +181,7 @@ GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\
 ```env
 CRON_SECRET="任意の長いランダム文字列"
 DATABASE_URL="本番DBの接続先"
+DIRECT_URL="本番DBの direct connection"
 ```
 
 4. Google Sheets API 方式なら、`.env` に入れた以下も Vercel に同じように登録する
