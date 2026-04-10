@@ -11,11 +11,13 @@ type StocksPageProps = {
 export default async function StocksPage({ searchParams }: StocksPageProps) {
   const params = (await searchParams) ?? {};
   const query = params.q ?? "";
-  const stocks = await getStocks(query);
+  const stocks = sortStocksByTargetZone(await getStocks(query));
   const freshCount = stocks.filter((stock) => {
     if (!stock.updatedAt) return false;
     return Date.now() - stock.updatedAt.getTime() < 1000 * 60 * 60 * 24;
   }).length;
+  const buyZoneCount = stocks.filter((stock) => isInBuyZone(stock.price, stock.targetPrice)).length;
+  const nearZoneCount = stocks.filter((stock) => isNearBuyZone(stock.price, stock.targetPrice)).length;
 
   return (
     <main className="min-h-screen text-slate-100">
@@ -30,8 +32,10 @@ export default async function StocksPage({ searchParams }: StocksPageProps) {
               <p className="mt-3 text-sm leading-7 text-slate-300">
                 銘柄コード、株価、年間配当、現在利回り、目安利回り、目安株価をまとめて確認できます。
               </p>
-              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                 <SummaryCard label="表示銘柄" value={`${stocks.length}件`} tone="cyan" />
+                <SummaryCard label="買い圏" value={`${buyZoneCount}件`} tone="rose" />
+                <SummaryCard label="あと10%" value={`${nearZoneCount}件`} tone="amber" />
                 <SummaryCard label="24時間以内に更新" value={`${freshCount}件`} tone="emerald" />
                 <SummaryCard label="検索条件" value={query || "すべて"} tone="violet" />
               </div>
@@ -62,11 +66,15 @@ function SummaryCard({
 }: {
   label: string;
   value: string;
-  tone: "cyan" | "emerald" | "violet";
+  tone: "cyan" | "emerald" | "violet" | "rose" | "amber";
 }) {
   const toneClass =
     tone === "cyan"
       ? "from-cyan-400/18 to-sky-400/8 text-cyan-100"
+      : tone === "rose"
+        ? "from-rose-400/18 to-pink-400/8 text-rose-100"
+        : tone === "amber"
+          ? "from-amber-400/18 to-orange-400/8 text-amber-100"
       : tone === "emerald"
         ? "from-emerald-400/18 to-lime-400/8 text-emerald-100"
         : "from-violet-400/18 to-fuchsia-400/8 text-violet-100";
@@ -76,5 +84,47 @@ function SummaryCard({
       <p className="text-xs uppercase tracking-[0.2em] text-slate-400">{label}</p>
       <p className="mt-2 truncate text-lg font-semibold">{value}</p>
     </div>
+  );
+}
+
+function sortStocksByTargetZone<T extends { code: string; price: number | null; targetPrice: number | null }>(
+  stocks: T[]
+) {
+  return [...stocks].sort((left, right) => {
+    const priorityDiff = getStockPriority(left.price, left.targetPrice) - getStockPriority(right.price, right.targetPrice);
+    if (priorityDiff !== 0) return priorityDiff;
+
+    const distanceDiff = getTargetDistance(left.price, left.targetPrice) - getTargetDistance(right.price, right.targetPrice);
+    if (distanceDiff !== 0) return distanceDiff;
+
+    return left.code.localeCompare(right.code, "ja");
+  });
+}
+
+function getStockPriority(price: number | null, targetPrice: number | null) {
+  if (isInBuyZone(price, targetPrice)) return 0;
+  if (isNearBuyZone(price, targetPrice)) return 1;
+  return 2;
+}
+
+function getTargetDistance(price: number | null, targetPrice: number | null) {
+  if (price == null || targetPrice == null || targetPrice <= 0) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  return (price - targetPrice) / targetPrice;
+}
+
+function isInBuyZone(price: number | null, targetPrice: number | null) {
+  return price != null && targetPrice != null && targetPrice > 0 && price <= targetPrice;
+}
+
+function isNearBuyZone(price: number | null, targetPrice: number | null) {
+  return (
+    price != null &&
+    targetPrice != null &&
+    targetPrice > 0 &&
+    price > targetPrice &&
+    price <= targetPrice * 1.1
   );
 }
