@@ -9,31 +9,76 @@ import {
 import { fetchDividendFromKabutan } from "@/server/scrape/kabutan";
 
 export async function scrapeStockSnapshot(code: string): Promise<StockSnapshot> {
+  // Step 1: Yahoo Quote (primary source for both price and dividend)
   const yahoo = await fetchFromYahooQuote(code);
-  const yahooSummary = yahoo.annualDividend ? { dividend: null, name: null } : await fetchDividendFromYahooSummary(code);
-  const yahooChartPrice = yahoo.price ? null : await fetchPriceFromYahooChart(code);
-  const stooqPrice = yahoo.price || yahooChartPrice ? null : await fetchFromStooq(code);
-  const yahooFinanceDividend =
-    yahoo.annualDividend || yahooSummary.dividend ? null : await fetchDividendFromYahooFinancePage(code);
-  const kabutanDividend =
-    yahoo.annualDividend || yahooSummary.dividend || yahooFinanceDividend ? null : await fetchDividendFromKabutan(code);
+
+  // Step 2: Fetch price and dividend fallbacks IN PARALLEL
+  const [priceResult, dividendResult] = await Promise.all([
+    resolvePriceFallback(code, yahoo.price),
+    resolveDividendFallback(code, yahoo.annualDividend)
+  ]);
+
+  const finalPrice = yahoo.price ?? priceResult.price;
+  const finalDividend = yahoo.annualDividend ?? dividendResult.dividend;
+  const finalName = yahoo.name ?? dividendResult.name;
 
   return {
     code,
-    name: yahoo.name ?? yahooSummary.name ?? null,
-    annualDividend:
-      yahoo.annualDividend ?? yahooSummary.dividend ?? yahooFinanceDividend ?? kabutanDividend ?? null,
-    price: yahoo.price ?? yahooChartPrice ?? stooqPrice ?? null,
+    name: finalName,
+    annualDividend: finalDividend,
+    price: finalPrice,
     source: [
       yahoo.price || yahoo.annualDividend || yahoo.name ? "Yahoo Finance" : null,
-      yahooSummary.dividend || yahooSummary.name ? "Yahoo Summary" : null,
-      yahooFinanceDividend ? "Yahoo Finance HTML" : null,
-      yahooChartPrice ? "Yahoo Chart" : null,
-      stooqPrice ? "stooq" : null,
-      kabutanDividend ? "株探" : null
+      ...priceResult.sources,
+      ...dividendResult.sources
     ]
       .filter(Boolean)
       .join(" + ") || "No source",
     message: yahoo.message
   };
+}
+
+async function resolvePriceFallback(
+  code: string,
+  yahooPrice: number | null | undefined
+): Promise<{ price: number | null; sources: string[] }> {
+  if (yahooPrice) return { price: null, sources: [] };
+
+  // Try Yahoo Chart and Stooq in parallel
+  const [chartPrice, stooqPrice] = await Promise.all([
+    fetchPriceFromYahooChart(code),
+    fetchFromStooq(code)
+  ]);
+
+  if (chartPrice) return { price: chartPrice, sources: ["Yahoo Chart"] };
+  if (stooqPrice) return { price: stooqPrice, sources: ["stooq"] };
+  return { price: null, sources: [] };
+}
+
+async function resolveDividendFallback(
+  code: string,
+  yahooDividend: number | null | undefined
+): Promise<{ dividend: number | null; name: string | null; sources: string[] }> {
+  if (yahooDividend) return { dividend: null, name: null, sources: [] };
+
+  // Try Yahoo Summary first
+  const yahooSummary = await fetchDividendFromYahooSummary(code);
+  if (yahooSummary.dividend) {
+    return { dividend: yahooSummary.dividend, name: yahooSummary.name, sources: ["Yahoo Summary"] };
+  }
+
+  // Try Yahoo Finance HTML and Kabutan in parallel
+  const [yahooFinanceDividend, kabutanDividend] = await Promise.all([
+    fetchDividendFromYahooFinancePage(code),
+    fetchDividendFromKabutan(code)
+  ]);
+
+  if (yahooFinanceDividend) {
+    return { dividend: yahooFinanceDividend, name: yahooSummary.name, sources: ["Yahoo Finance HTML"] };
+  }
+  if (kabutanDividend) {
+    return { dividend: kabutanDividend, name: yahooSummary.name, sources: ["株探"] };
+  }
+
+  return { dividend: null, name: yahooSummary.name, sources: [] };
 }

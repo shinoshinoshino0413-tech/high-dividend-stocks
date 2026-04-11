@@ -8,7 +8,11 @@ const envSchema = z.object({
   GOOGLE_SHEET_NAME: z.string().optional().default("一覧"),
   GOOGLE_DIVIDEND_SHEET_NAME: z.string().optional().default("配当"),
   GOOGLE_SERVICE_ACCOUNT_EMAIL: z.string().optional().default(""),
-  GOOGLE_PRIVATE_KEY: z.string().optional().default("")
+  GOOGLE_PRIVATE_KEY: z.string().optional().default(""),
+  AUTH_SECRET: z.string().optional().default(""),
+  GOOGLE_CLIENT_ID: z.string().optional().default(""),
+  GOOGLE_CLIENT_SECRET: z.string().optional().default(""),
+  ALLOWED_EMAILS: z.string().optional().default("")
 });
 
 export const env = envSchema.parse({
@@ -19,5 +23,9 @@ export const env = envSchema.parse({
   GOOGLE_SHEET_NAME: process.env.GOOGLE_SHEET_NAME,
   GOOGLE_DIVIDEND_SHEET_NAME: process.env.GOOGLE_DIVIDEND_SHEET_NAME,
   GOOGLE_SERVICE_ACCOUNT_EMAIL: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-  GOOGLE_PRIVATE_KEY: process.env.GOOGLE_PRIVATE_KEY
+  GOOGLE_PRIVATE_KEY: process.env.GOOGLE_PRIVATE_KEY,
+  AUTH_SECRET: process.env.AUTH_SECRET,
+  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+  ALLOWED_EMAILS: process.env.ALLOWED_EMAILS
 });

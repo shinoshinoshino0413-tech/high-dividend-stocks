@@ -3,11 +3,14 @@ import { calculateCurrentYield, calculateTargetPrice } from "@/lib/calc";
 import { scrapeStockSnapshot } from "@/server/scrape";
 import { fetchYahooQuotesBatch } from "@/server/scrape/yahoo";
 
+const CONCURRENCY = 5;
+
 type ScrapeAndPersistStocksArgs = {
   code?: string;
+  onProgress?: (done: number, total: number, code: string) => void;
 };
 
-export async function scrapeAndPersistStocks({ code }: ScrapeAndPersistStocksArgs) {
+export async function scrapeAndPersistStocks({ code, onProgress }: ScrapeAndPersistStocksArgs) {
   const stocks = await prisma.stock.findMany({
     where: code ? { code } : undefined,
     orderBy: { code: "asc" }
@@ -16,74 +19,91 @@ export async function scrapeAndPersistStocks({ code }: ScrapeAndPersistStocksArg
 
   let updated = 0;
   let failed = 0;
+  let done = 0;
 
-  for (const stock of stocks) {
-    const yahoo = yahooQuotes.get(stock.code);
-    const needsFallback =
-      !yahoo ||
-      !yahoo.price ||
-      !yahoo.annualDividend ||
-      !yahoo.name;
+  // Process stocks in parallel batches
+  for (let i = 0; i < stocks.length; i += CONCURRENCY) {
+    const batch = stocks.slice(i, i + CONCURRENCY);
 
-    const fallbackSnapshot = needsFallback ? await scrapeStockSnapshot(stock.code) : null;
+    const results = await Promise.allSettled(
+      batch.map(async (stock) => {
+        const yahoo = yahooQuotes.get(stock.code);
+        const needsFallback =
+          !yahoo ||
+          !yahoo.price ||
+          !yahoo.annualDividend ||
+          !yahoo.name;
 
-    const snapshot = {
-      code: stock.code,
-      name: yahoo?.name ?? fallbackSnapshot?.name ?? null,
-      annualDividend: yahoo?.annualDividend ?? fallbackSnapshot?.annualDividend ?? null,
-      price: yahoo?.price ?? fallbackSnapshot?.price ?? null,
-      source:
-        [
-          yahoo && (yahoo.price || yahoo.annualDividend || yahoo.name)
-            ? yahoo.source ?? "Yahoo Finance"
-            : null,
-          fallbackSnapshot?.source ?? null
-        ]
-          .filter(Boolean)
-          .join(" + ") || "No source",
-      message: fallbackSnapshot?.message ?? yahoo?.message
-    };
+        const fallbackSnapshot = needsFallback ? await scrapeStockSnapshot(stock.code) : null;
 
-    if (!snapshot.price && !snapshot.annualDividend) {
-      failed++;
-      await prisma.scrapeLog.create({
-        data: {
-          stockId: stock.id,
-          source: snapshot.source,
-          status: "failed",
-          message: snapshot.message ?? "price and annualDividend were both unavailable"
+        const snapshot = {
+          code: stock.code,
+          name: yahoo?.name ?? fallbackSnapshot?.name ?? null,
+          annualDividend: yahoo?.annualDividend ?? fallbackSnapshot?.annualDividend ?? null,
+          price: yahoo?.price ?? fallbackSnapshot?.price ?? null,
+          source:
+            [
+              yahoo && (yahoo.price || yahoo.annualDividend || yahoo.name)
+                ? yahoo.source ?? "Yahoo Finance"
+                : null,
+              fallbackSnapshot?.source ?? null
+            ]
+              .filter(Boolean)
+              .join(" + ") || "No source",
+          message: fallbackSnapshot?.message ?? yahoo?.message
+        };
+
+        if (!snapshot.price && !snapshot.annualDividend) {
+          await prisma.scrapeLog.create({
+            data: {
+              stockId: stock.id,
+              source: snapshot.source,
+              status: "failed",
+              message: snapshot.message ?? "price and annualDividend were both unavailable"
+            }
+          });
+          return { success: false, code: stock.code };
         }
-      });
-      continue;
+
+        const nextDividend = snapshot.annualDividend ?? stock.annualDividend;
+        const nextPrice = snapshot.price ?? stock.price;
+        const nextYield = calculateCurrentYield(nextDividend, nextPrice);
+        const nextTargetPrice = calculateTargetPrice(nextDividend, stock.targetYield);
+
+        await prisma.stock.update({
+          where: { id: stock.id },
+          data: {
+            name: snapshot.name ?? stock.name,
+            annualDividend: nextDividend,
+            price: nextPrice,
+            currentYield: nextYield,
+            targetPrice: nextTargetPrice,
+            updatedAt: new Date()
+          }
+        });
+
+        await prisma.scrapeLog.create({
+          data: {
+            stockId: stock.id,
+            source: snapshot.source,
+            status: "success",
+            message: snapshot.message
+          }
+        });
+
+        return { success: true, code: stock.code };
+      })
+    );
+
+    for (const result of results) {
+      done++;
+      if (result.status === "fulfilled" && result.value.success) {
+        updated++;
+      } else {
+        failed++;
+      }
+      onProgress?.(done, stocks.length, result.status === "fulfilled" ? result.value.code : "error");
     }
-
-    const nextDividend = snapshot.annualDividend ?? stock.annualDividend;
-    const nextPrice = snapshot.price ?? stock.price;
-    const nextYield = calculateCurrentYield(nextDividend, nextPrice);
-    const nextTargetPrice = calculateTargetPrice(nextDividend, stock.targetYield);
-
-    await prisma.stock.update({
-      where: { id: stock.id },
-      data: {
-        name: snapshot.name ?? stock.name,
-        annualDividend: nextDividend,
-        price: nextPrice,
-        currentYield: nextYield,
-        targetPrice: nextTargetPrice,
-        updatedAt: new Date()
-      }
-    });
-
-    await prisma.scrapeLog.create({
-      data: {
-        stockId: stock.id,
-        source: snapshot.source,
-        status: "success",
-        message: snapshot.message
-      }
-    });
-
-    updated++;
   }
 
   return {

@@ -6,9 +6,11 @@ import type { StockListItem } from "@/types/stock";
 export function StocksTable({ stocks }: { stocks: StockListItem[] }) {
   return (
     <div className="space-y-4">
+      {/* Mobile card layout */}
       <div className="grid gap-3 lg:hidden">
         {stocks.map((stock) => {
           const emphasis = getStockEmphasis(stock);
+          const distance = getDistancePercent(stock.price, stock.targetPrice);
 
           return (
             <article
@@ -17,11 +19,13 @@ export function StocksTable({ stocks }: { stocks: StockListItem[] }) {
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.24em] text-cyan-200/70">{stock.code}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-bold tracking-[0.24em] text-cyan-200/70">{stock.code}</p>
+                    {emphasis.label ? <PriorityBadge label={emphasis.label} tone={emphasis.tone} /> : null}
+                  </div>
                   <Link href={`/stocks/${stock.code}`} className="mt-2 block text-lg font-semibold text-white">
                     {stock.name ?? "名称未取得"}
                   </Link>
-                  {emphasis.label ? <PriorityBadge label={emphasis.label} tone={emphasis.tone} className="mt-3" /> : null}
                 </div>
                 <StatusBadge updatedAt={stock.updatedAt} />
               </div>
@@ -29,7 +33,7 @@ export function StocksTable({ stocks }: { stocks: StockListItem[] }) {
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <MobileMetric label="年間配当" value={formatMoney(stock.annualDividend)} />
                 <MobileMetric label="株価" value={formatMoney(stock.price)} valueClass={emphasis.priceClass} />
-                <MobileMetric label="現在利回り" value={formatPercent(stock.currentYield)} />
+                <MobileMetric label="現在利回り" value={formatPercent(stock.currentYield)} valueClass={getYieldClass(stock.currentYield, stock.targetYield)} />
                 <MobileMetric label="目安利回り" value={formatPercent(stock.targetYield)} />
               </div>
 
@@ -38,6 +42,7 @@ export function StocksTable({ stocks }: { stocks: StockListItem[] }) {
                   <span className="text-sm text-slate-400">目安株価</span>
                   <span className="text-base font-semibold text-cyan-100">{formatMoney(stock.targetPrice)}</span>
                 </div>
+                {distance != null && <DistanceBar distance={distance} />}
                 <p className="mt-2 text-xs text-slate-500">最終更新: {formatDateTime(stock.updatedAt)}</p>
               </div>
             </article>
@@ -45,13 +50,14 @@ export function StocksTable({ stocks }: { stocks: StockListItem[] }) {
         })}
       </div>
 
+      {/* Desktop table */}
       <div className="hidden overflow-hidden rounded-[28px] border border-white/10 bg-[#09111d]/80 lg:block">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-white/10 text-sm">
             <thead className="bg-[#101a2f] text-left text-slate-200">
               <tr>
-                {["コード", "企業名", "年間配当", "株価", "現在利回り", "目安利回り", "目安株価", "状態", "更新日時"].map((label) => (
-                  <th key={label} className="px-4 py-4 font-medium">
+                {["コード", "企業名", "年間配当", "株価", "現在利回り", "目安利回り", "目安株価", "目安まで", "状態", "更新日時"].map((label) => (
+                  <th key={label} className="px-4 py-4 font-medium whitespace-nowrap">
                     {label}
                   </th>
                 ))}
@@ -60,27 +66,33 @@ export function StocksTable({ stocks }: { stocks: StockListItem[] }) {
             <tbody className="divide-y divide-white/5 bg-transparent text-slate-200">
               {stocks.map((stock) => {
                 const emphasis = getStockEmphasis(stock);
+                const distance = getDistancePercent(stock.price, stock.targetPrice);
 
                 return (
                   <tr key={stock.code} className={`transition hover:bg-white/[0.03] ${emphasis.rowClass}`}>
-                    <td className="px-4 py-4 font-semibold text-cyan-200">{stock.code}</td>
+                    <td className="px-4 py-4 font-bold tabular-nums text-cyan-200">{stock.code}</td>
                     <td className="px-4 py-4">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2.5">
                         <Link href={`/stocks/${stock.code}`} className="font-medium text-white hover:text-cyan-200">
                           {stock.name ?? "名称未取得"}
                         </Link>
                         {emphasis.label ? <PriorityBadge label={emphasis.label} tone={emphasis.tone} /> : null}
                       </div>
                     </td>
-                    <td className="px-4 py-4">{formatMoney(stock.annualDividend)}</td>
-                    <td className={`px-4 py-4 ${emphasis.priceClass}`}>{formatMoney(stock.price)}</td>
-                    <td className="px-4 py-4">{formatPercent(stock.currentYield)}</td>
-                    <td className="px-4 py-4">{formatPercent(stock.targetYield)}</td>
-                    <td className="px-4 py-4">{formatMoney(stock.targetPrice)}</td>
+                    <td className="px-4 py-4 tabular-nums">{formatMoney(stock.annualDividend)}</td>
+                    <td className={`px-4 py-4 tabular-nums font-semibold ${emphasis.priceClass}`}>{formatMoney(stock.price)}</td>
+                    <td className={`px-4 py-4 tabular-nums font-semibold ${getYieldClass(stock.currentYield, stock.targetYield)}`}>
+                      {formatPercent(stock.currentYield)}
+                    </td>
+                    <td className="px-4 py-4 tabular-nums">{formatPercent(stock.targetYield)}</td>
+                    <td className="px-4 py-4 tabular-nums">{formatMoney(stock.targetPrice)}</td>
+                    <td className="px-4 py-4 min-w-[140px]">
+                      {distance != null ? <DistanceBar distance={distance} compact /> : <span className="text-slate-500">—</span>}
+                    </td>
                     <td className="px-4 py-4">
                       <StatusBadge updatedAt={stock.updatedAt} />
                     </td>
-                    <td className="px-4 py-4 text-slate-400">{formatDateTime(stock.updatedAt)}</td>
+                    <td className="px-4 py-4 text-slate-400 whitespace-nowrap">{formatDateTime(stock.updatedAt)}</td>
                   </tr>
                 );
               })}
@@ -92,11 +104,53 @@ export function StocksTable({ stocks }: { stocks: StockListItem[] }) {
   );
 }
 
+/** Distance from current price to target price as a percentage. Negative = in buy zone. */
+function getDistancePercent(price: number | null, targetPrice: number | null): number | null {
+  if (price == null || targetPrice == null || targetPrice <= 0) return null;
+  return ((price - targetPrice) / targetPrice) * 100;
+}
+
+function DistanceBar({ distance, compact = false }: { distance: number; compact?: boolean }) {
+  const inBuyZone = distance <= 0;
+  const nearZone = !inBuyZone && distance <= 10;
+
+  const label = inBuyZone
+    ? `${Math.abs(distance).toFixed(1)}% 下`
+    : `あと ${distance.toFixed(1)}%`;
+
+  const barColor = inBuyZone
+    ? "bg-gradient-to-r from-rose-400 to-pink-400"
+    : nearZone
+      ? "bg-gradient-to-r from-amber-400 to-orange-400"
+      : "bg-gradient-to-r from-slate-500 to-slate-400";
+
+  // Clamp bar width between 5% and 100%
+  const barWidth = inBuyZone
+    ? 100
+    : Math.max(5, Math.min(100, ((30 - distance) / 30) * 100));
+
+  return (
+    <div className={compact ? "mt-0" : "mt-2"}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex-1 overflow-hidden rounded-full bg-white/8 h-1.5">
+          <div
+            className={`h-full rounded-full transition-all ${barColor}`}
+            style={{ width: `${barWidth}%` }}
+          />
+        </div>
+        <span className={`whitespace-nowrap text-xs font-medium tabular-nums ${inBuyZone ? "text-rose-300" : nearZone ? "text-amber-300" : "text-slate-400"}`}>
+          {label}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function MobileMetric({ label, value, valueClass }: { label: string; value: string; valueClass?: string }) {
   return (
     <div className="rounded-2xl bg-[#0a1324] px-4 py-3">
       <p className="text-xs text-slate-400">{label}</p>
-      <p className={`mt-2 text-base font-semibold ${valueClass ?? "text-slate-100"}`}>{value}</p>
+      <p className={`mt-2 text-base font-semibold tabular-nums ${valueClass ?? "text-slate-100"}`}>{value}</p>
     </div>
   );
 }
@@ -120,6 +174,13 @@ function PriorityBadge({
       {label}
     </span>
   );
+}
+
+function getYieldClass(currentYield: number | null, targetYield: number | null) {
+  if (currentYield == null || targetYield == null) return "text-slate-100";
+  if (currentYield >= targetYield) return "text-emerald-300";
+  if (currentYield >= targetYield * 0.9) return "text-amber-200";
+  return "text-slate-100";
 }
 
 function getStockEmphasis(stock: StockListItem) {
